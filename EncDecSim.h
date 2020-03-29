@@ -30,6 +30,7 @@ void Transform (uint32_t *Data, KEY_INFO *keyInfo);
 void Encode (uint32_t *bufPtr, uint32_t *nextBufPtr, KEY_INFO *keyInfo);
 void Decode (uint32_t *bufPtr, uint32_t *nextBufPtr, KEY_INFO *keyInfo);
 void GetCode (uint16_t seed, uint32_t *bufPtr, uint8_t *secTable);
+void HashDWORD(uint32_t *Data, uint8_t *edStruct);
 
 #endif
 

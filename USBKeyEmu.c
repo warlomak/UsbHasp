@@ -281,7 +281,7 @@ void EmulateKey(PKEYDATA pKeyData, PKEY_REQUEST request, uint32_t *outBufLen, PK
         if ( pKeyData->isKeyOpened ) {
             keyResponse.status = KEY_OPERATION_STATUS_OK;
             memcpy (keyResponse.data, &request->param1, 4);
-            Transform ((uint32_t *)keyResponse.data, (KEY_INFO *)pKeyData->edStruct);
+            HashDWORD ((uint32_t *)keyResponse.data, pKeyData->edStruct);
             outDataLen = sizeof(uint32_t);
             encodeOutData = 1;
         }

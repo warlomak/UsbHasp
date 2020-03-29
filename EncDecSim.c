@@ -289,3 +289,120 @@ void GetCode (uint16_t seed, uint32_t *bufPtr, uint8_t *secTable) {
         }
     }
 }
+
+#define TR_DIV 0x7E0
+#define SUBTRANSV(a,b) (a / 18 + b + 112 * (a % 18)) % TR_DIV
+#define TRANSV(a,b,c) (c + SUBTRANSV(a, b)) % TR_DIV
+
+uint32_t TransformDWORD(uint32_t in1, uint32_t in2)
+{
+
+    uint16_t lw = in1;
+    uint16_t hw = in1 >> 16;
+
+    return SUBTRANSV(TRANSV(TRANSV((in2 + lw) % TR_DIV, hw, lw), hw, lw), hw);
+
+}
+
+#define GET_FROM_EDS(a, edStruct) ((edStruct[a >> 3] >> (7 - (a & 7))) & 1)
+#define GET_FROM_EDS_XOR(a, b, edStruct) ((edStruct[a >> 3] >> (7 - (a & 7))) ^ (edStruct[b >> 3] >> (7 - (b & 7)))) & 1
+
+uint8_t TransformEdStruct(uint8_t in5Bit, uint8_t *edStruct, uint8_t index)
+{
+    uint32_t dw1;
+    uint32_t dw2;
+
+    in5Bit = in5Bit & 0x1F;
+    index  = index + 6;
+
+    uint8_t  tr5Bit = (245 * in5Bit ^ 5) & 0x1F;
+
+    uint32_t tr5Bit56  = 56 * in5Bit;
+    uint32_t tr5Bit145 = tr5Bit56 + 145;
+    uint32_t endEdStruct = ((uint32_t*)edStruct)[63];
+
+    for (int i = 4; i >= 0; i-- ) {
+        dw1 = TransformDWORD(endEdStruct, tr5Bit145);
+        tr5Bit ^= GET_FROM_EDS(dw1, edStruct) << i;
+        tr5Bit145++;
+    }
+
+    dw1 = TransformDWORD(endEdStruct, tr5Bit56 + 144);
+    uint8_t f1 = (edStruct[dw1 >> 3] >> (7 - (dw1 & 7))) & 1;
+    if ( tr5Bit != 0x1F )
+    {
+        dw1 = TransformDWORD(endEdStruct, tr5Bit56 + index + tr5Bit + 144);
+        dw2 = TransformDWORD(endEdStruct, tr5Bit56 + ((tr5Bit + index + in5Bit) & 7) + 192);
+        f1 ^= GET_FROM_EDS_XOR(dw2, dw1, edStruct);
+    }
+
+    uint32_t count = 0;
+    uint32_t scount = 0;
+    if ( (48 - index) > 0 )
+    {
+        uint8_t f2 = in5Bit & 1;
+        uint32_t index144 = index + 144;
+        uint32_t count143 = 143;
+        while ( count < (48 - index) )
+        {
+            uint8_t f3 = 0;
+
+            if ( f2 )
+            {
+                dw1 = TransformDWORD(endEdStruct, 2015 - count % 38);
+                dw2 = TransformDWORD(endEdStruct, count143);
+                f3 = GET_FROM_EDS_XOR(dw2, dw1, edStruct);
+            }
+
+            if ( f1 )
+            {
+                dw1 = TransformDWORD(endEdStruct, count % 38 + 64);
+                dw2 = TransformDWORD(endEdStruct, count + 1936);
+                f3 ^= GET_FROM_EDS_XOR(dw2, dw1, edStruct);
+            }
+
+            if ( f3 )
+            {
+                uint32_t v33 = index144;
+                for (int i = 0; i < 32; i++ ) {
+                    dw1 = TransformDWORD(endEdStruct, v33);
+                    edStruct[dw1 >> 3] = edStruct[dw1 >> 3] & ~(1 << (7 - (dw1 & 7))) | (((f3 ^ GET_FROM_EDS(dw1, edStruct)) & 1) << (7 - (dw1 & 7)));
+                    v33 += 56;
+                }
+                count = scount;
+            }
+            scount = ++count;
+            count143--; index144++;
+            f2 = in5Bit & 1;
+        }
+    }
+    dw1 = TransformDWORD(endEdStruct, tr5Bit56 + index + 144);
+    dw2 = TransformDWORD(endEdStruct, tr5Bit56 + (in5Bit + index) % 8 + 192);
+    return GET_FROM_EDS_XOR(dw2, dw1, edStruct);
+}
+
+
+void HashDWORD(uint32_t *Data, uint8_t *edStruct)
+{
+    uint8_t fodd;
+    uint8_t buf[256];
+
+    uint8_t *arrayData8 = (uint8_t *) Data;
+    uint8_t index = 0;
+
+    memcpy(buf, edStruct, 256);
+
+    for ( uint8_t i = 0; i < 39; i++ ) {
+        while ( 1 )
+        {
+            fodd = TransformEdStruct(arrayData8[index], buf, i);
+            index = (fodd | 2 * arrayData8[0]) & 3;
+            if ( (arrayData8[0] & 1) != fodd ) break;
+            *Data = *Data >> 1;
+            i++;
+            if ( i >= 39 ) return;
+        }
+        *Data = (*Data >> 1) ^ ROL((uint32_t) 0x14028003, 5);
+    }
+}
+
