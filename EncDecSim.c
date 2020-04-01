@@ -335,8 +335,6 @@ uint8_t TransformEdStruct(uint8_t in5Bit, uint8_t *edStruct, uint8_t index)
 
     if (index < 48) {
 
-        uint32_t scount = 0;
-
         for (int count = 0; count + index < 48; count++ ) {
 
             uint8_t f2 = 0;
